@@ -47,7 +47,134 @@ export interface WorkspaceConfig {
   slug: string;
   industry: string;
   primaryColor: string;
+  accentColor?: string;
+  themeScheme?: string;
+  logoUrl?: string;
   onboarded: boolean;
+}
+
+export interface ThemePreset {
+  id: string;
+  name: string;
+  primary: string;
+  primaryHover: string;
+  primaryLight: string;
+  accent: string;
+  sidebarBg: string;
+  previewColors: [string, string];
+}
+
+export const THEME_PRESETS: ThemePreset[] = [
+  {
+    id: 'avensus-petrol',
+    name: 'Avensus Petrol & Copper',
+    primary: '#1E5A63',
+    primaryHover: '#154249',
+    primaryLight: '#E6F0F2',
+    accent: '#EA6A29',
+    sidebarBg: '#0F3136',
+    previewColors: ['#1E5A63', '#EA6A29'],
+  },
+  {
+    id: 'ocean-sapphire',
+    name: 'Ocean Sapphire & Amber',
+    primary: '#1D4ED8',
+    primaryHover: '#1E40AF',
+    primaryLight: '#EFF6FF',
+    accent: '#F59E0B',
+    sidebarBg: '#0F172A',
+    previewColors: ['#1D4ED8', '#F59E0B'],
+  },
+  {
+    id: 'emerald-corporate',
+    name: 'Emerald & Gold',
+    primary: '#059669',
+    primaryHover: '#047857',
+    primaryLight: '#ECFDF5',
+    accent: '#D97706',
+    sidebarBg: '#06281E',
+    previewColors: ['#059669', '#D97706'],
+  },
+  {
+    id: 'modern-indigo',
+    name: 'Modern Indigo & Rose',
+    primary: '#4F46E5',
+    primaryHover: '#4338CA',
+    primaryLight: '#EEF2FF',
+    accent: '#F43F5E',
+    sidebarBg: '#1E1B4B',
+    previewColors: ['#4F46E5', '#F43F5E'],
+  },
+  {
+    id: 'crimson-executive',
+    name: 'Crimson & Slate',
+    primary: '#B91C1C',
+    primaryHover: '#991B1B',
+    primaryLight: '#FEF2F2',
+    accent: '#E11D48',
+    sidebarBg: '#2D0A0A',
+    previewColors: ['#B91C1C', '#E11D48'],
+  },
+  {
+    id: 'midnight-cyan',
+    name: 'Midnight & Cyan',
+    primary: '#0284C7',
+    primaryHover: '#0369A1',
+    primaryLight: '#F0F9FF',
+    accent: '#06B6D4',
+    sidebarBg: '#0C1A2E',
+    previewColors: ['#0284C7', '#06B6D4'],
+  },
+];
+
+export function adjustColor(hex: string, percent: number): string {
+  let clean = hex.replace('#', '');
+  if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+  let num = parseInt(clean, 16);
+  if (isNaN(num)) return hex;
+  let r = Math.min(255, Math.max(0, ((num >> 16) & 0xFF) + Math.round((percent / 100) * 255)));
+  let g = Math.min(255, Math.max(0, ((num >> 8) & 0xFF) + Math.round((percent / 100) * 255)));
+  let b = Math.min(255, Math.max(0, (num & 0xFF) + Math.round((percent / 100) * 255)));
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+export function applyWorkspaceTheme(ws: WorkspaceConfig, isDark: boolean) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+
+  const preset = THEME_PRESETS.find(p => p.id === ws.themeScheme) || {
+    id: 'custom',
+    name: 'Custom',
+    primary: ws.primaryColor || '#1E5A63',
+    primaryHover: ws.primaryColor ? adjustColor(ws.primaryColor, -15) : '#154249',
+    primaryLight: ws.primaryColor ? `${ws.primaryColor}18` : '#E6F0F2',
+    accent: ws.accentColor || '#EA6A29',
+    sidebarBg: ws.primaryColor ? adjustColor(ws.primaryColor, -60) : '#0F3136',
+    previewColors: [ws.primaryColor || '#1E5A63', ws.accentColor || '#EA6A29'] as [string, string],
+  };
+
+  const primary = ws.primaryColor && ws.themeScheme === 'custom' ? ws.primaryColor : preset.primary;
+  const accent = ws.accentColor && ws.themeScheme === 'custom' ? ws.accentColor : preset.accent;
+  const hover = ws.themeScheme === 'custom' ? adjustColor(primary, -15) : preset.primaryHover;
+  const light = ws.themeScheme === 'custom' ? `${primary}18` : preset.primaryLight;
+  const sidebar = ws.themeScheme === 'custom' ? adjustColor(primary, -60) : preset.sidebarBg;
+
+  if (isDark) {
+    const darkPrimary = adjustColor(primary, 25);
+    root.style.setProperty('--teal', darkPrimary);
+    root.style.setProperty('--teal-hover', adjustColor(darkPrimary, 20));
+    root.style.setProperty('--teal-light', `${primary}28`);
+    root.style.setProperty('--gold', accent);
+    root.style.setProperty('--sidebar-active', accent);
+    root.style.setProperty('--sidebar-bg', '#071518');
+  } else {
+    root.style.setProperty('--teal', primary);
+    root.style.setProperty('--teal-hover', hover);
+    root.style.setProperty('--teal-light', light);
+    root.style.setProperty('--gold', accent);
+    root.style.setProperty('--sidebar-active', accent);
+    root.style.setProperty('--sidebar-bg', sidebar);
+  }
 }
 
 export const DEMO_USERS: UserAccount[] = [
@@ -167,6 +294,7 @@ export default function Home() {
   const [newTaskPriority, setNewTaskPriority] = useState('medium');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskAttachment, setNewTaskAttachment] = useState('');
+  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
 
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamEmail, setNewTeamEmail] = useState('');
@@ -385,8 +513,13 @@ export default function Home() {
       } else {
         document.documentElement.classList.remove('dark');
       }
+      applyWorkspaceTheme(workspace, darkMode);
     }
-  }, [darkMode, mounted]);
+  }, [darkMode, mounted, workspace]);
+
+  useEffect(() => {
+    setLogoLoaded(true);
+  }, [workspace.logoUrl]);
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -557,6 +690,18 @@ export default function Home() {
     }
   };
 
+  // Helper to open Add Task modal with proper project preselection
+  const openAddTaskModal = (projId?: number | null) => {
+    const fallbackProjId = projId || selectedProjectId || (projects.length > 0 ? projects[0].id : 0);
+    setNewTaskProjId(fallbackProjId);
+    setNewTaskTitle('');
+    setNewTaskAssignee('');
+    setNewTaskPriority('medium');
+    setNewTaskDueDate('');
+    setNewTaskAttachment('');
+    setShowTaskModal(true);
+  };
+
   // --- CRUD Task handlers ---
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -564,14 +709,28 @@ export default function Home() {
       alert('Access Restricted: Read-only accounts cannot add tasks.');
       return;
     }
-    if (!newTaskTitle.trim() || !newTaskProjId) return;
+
+    if (!newTaskTitle.trim()) {
+      alert('Please enter a task title.');
+      return;
+    }
+
+    // Ensure a valid project ID is selected
+    const targetProjId = Number(newTaskProjId) || (selectedProjectId ? Number(selectedProjectId) : (projects.length > 0 ? Number(projects[0].id) : null));
+    if (!targetProjId) {
+      alert('Please create or select an associated project first before adding tasks.');
+      return;
+    }
+
+    if (isSubmittingTask) return;
+    setIsSubmittingTask(true);
 
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId: Number(newTaskProjId),
+          projectId: targetProjId,
           title: newTaskTitle.trim(),
           assignee: newTaskAssignee || null,
           priority: newTaskPriority,
@@ -580,6 +739,20 @@ export default function Home() {
       });
 
       if (res.ok) {
+        const createdTask = (await res.json()) as Task;
+        // Optimistically add to tasks list immediately so UI updates in real-time
+        if (createdTask && createdTask.id) {
+          setTasks(prev => [createdTask, ...prev.filter(t => t.id !== createdTask.id)]);
+        }
+
+        // Reset form & immediately close modal so it disappears without delay
+        setNewTaskTitle('');
+        setNewTaskAssignee('');
+        setNewTaskPriority('medium');
+        setNewTaskDueDate('');
+        setNewTaskAttachment('');
+        setShowTaskModal(false);
+
         addActivity('created new task card', newTaskTitle.trim());
         const assignedMember = teamMembers.find(m => getInitials(m.name) === newTaskAssignee || m.name === newTaskAssignee);
         triggerNotification(
@@ -588,16 +761,17 @@ export default function Home() {
           assignedMember?.email || 'all',
           'assignment'
         );
-        setNewTaskTitle('');
-        setNewTaskAssignee('');
-        setNewTaskPriority('medium');
-        setNewTaskDueDate('');
-        setNewTaskAttachment('');
-        setShowTaskModal(false);
+
         await loadData();
+      } else {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        alert(`Error: ${errData.error || 'Failed to create task card on server.'}`);
       }
     } catch (err) {
       console.error('Failed to create task:', err);
+      alert('Network error: Unable to create task. Please check your connection.');
+    } finally {
+      setIsSubmittingTask(false);
     }
   };
 
@@ -1061,6 +1235,7 @@ export default function Home() {
         logoRef={logoRef}
         setLogoLoaded={setLogoLoaded}
         teamMembers={teamMembers}
+        workspace={workspace}
       />
     );
   }
@@ -1072,17 +1247,22 @@ export default function Home() {
         <div className="brand" onClick={() => { setActive('Overview'); setSelectedProjectId(null); }} style={{ cursor: 'pointer' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
+            key={workspace.logoUrl || 'default'}
             ref={logoRef}
-            src="/logo.webp" 
-            alt="Avensus Logo"
+            src={workspace.logoUrl || "/logo.webp"} 
+            alt={`${workspace.name} Logo`}
             onLoad={() => setLogoLoaded(true)}
             onError={(e) => { e.currentTarget.style.display = 'none'; setLogoLoaded(false); }}
             style={{ display: logoLoaded ? 'block' : 'none', width: '38px', height: '38px', borderRadius: 'var(--radius-md)', objectFit: 'contain' }}
           />
-          {!logoLoaded && <span className="brand-mark">A</span>}
+          {!logoLoaded && (
+            <span className="brand-mark" style={{ background: 'var(--teal)', color: '#ffffff', fontWeight: 700 }}>
+              {workspace.name ? workspace.name.trim().charAt(0).toUpperCase() : 'A'}
+            </span>
+          )}
           <span>
             <b>{workspace.name}</b>
-            <small>Avensus Project Hub</small>
+            <small>{workspace.slug ? `${workspace.slug}.hub` : 'Enterprise Hub'}</small>
           </span>
         </div>
         <nav aria-label="Primary navigation">
@@ -1111,9 +1291,9 @@ export default function Home() {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="nav-item" onClick={() => setShowWizard(true)} style={{ color: 'var(--teal)' }}>
-            <span className="nav-icon">🚀</span>
-            New Workspace Setup...
+          <button className="nav-item" onClick={() => setShowWizard(true)} style={{ color: 'var(--teal)' }} title="Customize company name, logo, and color scheme">
+            <span className="nav-icon">⚙️</span>
+            Workspace Setup &amp; Branding
           </button>
           <button className="nav-item" onClick={toggleTheme}>
             <span className="nav-icon">{!mounted ? '🌙' : (darkMode ? '☀️' : '🌙')}</span>
@@ -1240,7 +1420,7 @@ export default function Home() {
           )}
 
           {canCreateTask && (
-            <button className="secondary-button" style={{ marginLeft: '8px' }} onClick={() => setShowTaskModal(true)}>
+            <button className="secondary-button" style={{ marginLeft: '8px' }} onClick={() => openAddTaskModal()}>
               ＋ Add task
             </button>
           )}
@@ -1263,7 +1443,7 @@ export default function Home() {
                 tasksCount={tasks.length}
                 teamCount={teamMembers.length}
                 onOpenWizard={() => setShowWizard(true)}
-                onAddTask={() => setShowTaskModal(true)}
+                onAddTask={() => openAddTaskModal()}
                 onAddTeam={() => setShowTeamModal(true)}
               />
 
@@ -1314,10 +1494,7 @@ export default function Home() {
                   onToggleTask={handleToggleTaskStatus}
                   onUpdateTaskStatus={handleUpdateTaskStatus}
                   onUpdateProjectStatus={handleUpdateProjectStatus}
-                  onAddTask={() => {
-                    setNewTaskProjId(selectedProjectId);
-                    setShowTaskModal(true);
-                  }}
+                  onAddTask={() => openAddTaskModal(selectedProjectId)}
                   onEditTask={openEditTask}
                   onDeleteTask={handleDeleteTask}
                   onEditProject={openEditProject}
@@ -1708,7 +1885,7 @@ export default function Home() {
                           )}
 
                           {canCreateTask && (
-                            <button className="primary-button" onClick={() => setShowTaskModal(true)}>
+                            <button className="primary-button" onClick={() => openAddTaskModal()}>
                               ＋ Add task
                             </button>
                           )}
@@ -2162,7 +2339,11 @@ export default function Home() {
                   </div>
                   <div className="form-group">
                     <label htmlFor="task-project">Associated Project</label>
-                    <select id="task-project" value={newTaskProjId} onChange={e => setNewTaskProjId(Number(e.target.value))}>
+                    <select 
+                      id="task-project" 
+                      value={newTaskProjId || (projects.length > 0 ? projects[0].id : '')} 
+                      onChange={e => setNewTaskProjId(Number(e.target.value))}
+                    >
                       {projects.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
@@ -2200,8 +2381,24 @@ export default function Home() {
               )}
             </div>
             <div className="modal-footer">
-              <button type="button" className="secondary-button" onClick={() => setShowTaskModal(false)}>Cancel</button>
-              {projects.length > 0 && <button type="submit" className="primary-button">Create Task</button>}
+              <button 
+                type="button" 
+                className="secondary-button" 
+                onClick={() => setShowTaskModal(false)}
+                disabled={isSubmittingTask}
+              >
+                Cancel
+              </button>
+              {projects.length > 0 && (
+                <button 
+                  type="submit" 
+                  className="primary-button"
+                  disabled={isSubmittingTask || !newTaskTitle.trim()}
+                  style={{ opacity: isSubmittingTask ? 0.7 : 1, cursor: isSubmittingTask ? 'not-allowed' : 'pointer' }}
+                >
+                  {isSubmittingTask ? 'Creating Task... ⏳' : 'Create Task'}
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -2498,66 +2695,354 @@ function OnboardingWizard({ workspace, onClose, onComplete }: WizardProps) {
   const [wsName, setWsName] = useState(workspace.name);
   const [wsSlug, setWsSlug] = useState(workspace.slug);
   const [wsIndustry, setWsIndustry] = useState(workspace.industry);
+  const [logoUrl, setLogoUrl] = useState(workspace.logoUrl || '');
+  const [themeScheme, setThemeScheme] = useState(workspace.themeScheme || 'avensus-petrol');
+  const [primaryColor, setPrimaryColor] = useState(workspace.primaryColor || '#1E5A63');
+  const [accentColor, setAccentColor] = useState(workspace.accentColor || '#EA6A29');
+  const [isCustomColors, setIsCustomColors] = useState(workspace.themeScheme === 'custom');
+
   const [teamRole, setTeamRole] = useState('Workspace Admin');
   const [memberEmail, setMemberEmail] = useState('');
   const [firstProject, setFirstProject] = useState('Q4 Client Deliverables');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2.5 * 1024 * 1024) {
+        alert('Please choose an image file under 2.5MB for fast loading.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (typeof event.target?.result === 'string') {
+          setLogoUrl(event.target.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSelectPreset = (preset: ThemePreset) => {
+    setThemeScheme(preset.id);
+    setPrimaryColor(preset.primary);
+    setAccentColor(preset.accent);
+    setIsCustomColors(false);
+  };
+
+  const buildConfig = (): WorkspaceConfig => ({
+    name: wsName.trim() || 'Avensus Workspace',
+    slug: wsSlug.trim() || 'avensus-hub',
+    industry: wsIndustry,
+    primaryColor,
+    accentColor,
+    themeScheme: isCustomColors ? 'custom' : themeScheme,
+    logoUrl,
+    onboarded: true,
+  });
 
   const handleNext = () => {
     if (step < 4) {
       setStep(step + 1);
     } else {
-      onComplete({
-        name: wsName.trim() || 'Avensus Workspace',
-        slug: wsSlug.trim() || 'avensus-hub',
-        industry: wsIndustry,
-        primaryColor: '#0d9488',
-        onboarded: true,
-      });
+      onComplete(buildConfig());
     }
   };
 
+  const handleQuickSave = () => {
+    onComplete(buildConfig());
+  };
+
+  const initialLetter = wsName ? wsName.trim().charAt(0).toUpperCase() : 'A';
+
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '540px' }}>
+      <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header">
           <div>
             <span className="eyebrow">STEP {step} OF 4</span>
-            <h3 style={{ margin: 0 }}>Workspace Setup Wizard</h3>
+            <h3 style={{ margin: 0 }}>Workspace Setup &amp; Branding</h3>
           </div>
           <button type="button" className="modal-close" onClick={onClose}>×</button>
         </div>
 
-        <div className="modal-body" style={{ minHeight: '260px' }}>
+        <div className="modal-body" style={{ minHeight: '300px' }}>
           {step === 1 && (
-            <div>
-              <h4 style={{ margin: '0 0 8px', fontSize: '16px' }}>1. Workspace Identity & Branding</h4>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>Customize your team workspace name and industry focus.</p>
-              
-              <div className="form-group">
-                <label htmlFor="ws-name">Workspace Name</label>
-                <input id="ws-name" type="text" value={wsName} onChange={e => { setWsName(e.target.value); setWsSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')); }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div>
+                <h4 style={{ margin: '0 0 6px', fontSize: '16px' }}>1. Company Identity &amp; White-Label Branding</h4>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                  Customize the system name, company logo, and visual color scheme to match any organization.
+                </p>
               </div>
 
-              <div className="form-group">
-                <label htmlFor="ws-slug">URL Subdomain Slug</label>
-                <input id="ws-slug" type="text" value={wsSlug} onChange={e => setWsSlug(e.target.value)} />
+              {/* Company Name & Slug */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label htmlFor="ws-name">Company / Workspace Name</label>
+                  <input 
+                    id="ws-name" 
+                    type="text" 
+                    value={wsName} 
+                    placeholder="e.g. Zamtel, Airtel, Acme Corp"
+                    onChange={e => { 
+                      setWsName(e.target.value); 
+                      setWsSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')); 
+                    }} 
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label htmlFor="ws-slug">Subdomain Identifier</label>
+                  <input 
+                    id="ws-slug" 
+                    type="text" 
+                    value={wsSlug} 
+                    placeholder="e.g. zamtel-hub"
+                    onChange={e => setWsSlug(e.target.value)} 
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
+              <div className="form-group" style={{ margin: 0 }}>
                 <label htmlFor="ws-industry">Industry Category</label>
                 <select id="ws-industry" value={wsIndustry} onChange={e => setWsIndustry(e.target.value)}>
-                  <option value="Software & Technology">Software & Technology</option>
-                  <option value="Marketing & Design">Marketing & Design Agency</option>
-                  <option value="Financial Services">Financial & Enterprise</option>
-                  <option value="Healthcare & Science">Healthcare & Bio</option>
+                  <option value="Software & Technology">Software &amp; Technology</option>
+                  <option value="Telecommunications">Telecommunications &amp; Networks</option>
+                  <option value="Financial & Banking">Financial Services &amp; Banking</option>
+                  <option value="Marketing & Design">Marketing &amp; Creative Agency</option>
+                  <option value="Healthcare & Life Sciences">Healthcare &amp; Life Sciences</option>
+                  <option value="Government & Public Sector">Government &amp; Public Sector</option>
                 </select>
+              </div>
+
+              {/* Logo Customization Section */}
+              <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(0,0,0,0.02)' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+                  Company Logo
+                </label>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                  {/* Live Logo Preview Box */}
+                  <div style={{ 
+                    width: '60px', 
+                    height: '60px', 
+                    borderRadius: '10px', 
+                    border: '1px solid var(--border-color)', 
+                    background: 'var(--card-bg)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    flexShrink: 0
+                  }}>
+                    {logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img 
+                        src={logoUrl} 
+                        alt="Logo preview" 
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        onError={() => setLogoUrl('')}
+                      />
+                    ) : (
+                      <div style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        background: primaryColor, 
+                        color: '#ffffff', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        fontSize: '24px'
+                      }}>
+                        {initialLetter}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '200px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <input 
+                        ref={fileInputRef} 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={handleLogoUpload} 
+                      />
+                      <button 
+                        type="button" 
+                        className="secondary-button" 
+                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        📁 Upload Logo Image
+                      </button>
+                      <button 
+                        type="button" 
+                        className="secondary-button" 
+                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                        onClick={() => setLogoUrl('/logo.webp')}
+                        title="Reset to Avensus logo"
+                      >
+                        ↺ Avensus Logo
+                      </button>
+                      {logoUrl && (
+                        <button 
+                          type="button" 
+                          className="secondary-button" 
+                          style={{ fontSize: '12px', padding: '6px 12px', color: '#ef4444' }}
+                          onClick={() => setLogoUrl('')}
+                          title="Use monogram initial letter badge"
+                        >
+                          ✕ Use Monogram
+                        </button>
+                      )}
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Or paste direct image URL (https://...)" 
+                      value={logoUrl.startsWith('data:') ? '' : logoUrl} 
+                      onChange={e => setLogoUrl(e.target.value)} 
+                      style={{ fontSize: '11px', padding: '6px 10px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Color Scheme Customization */}
+              <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(0,0,0,0.02)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, margin: 0 }}>
+                    Color Scheme &amp; Theme
+                  </label>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsCustomColors(!isCustomColors)}
+                    style={{ background: 'none', border: 'none', color: 'var(--teal)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    {isCustomColors ? '← Use Presets' : '🎨 Custom Hex Colors'}
+                  </button>
+                </div>
+
+                {!isCustomColors ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                    {THEME_PRESETS.map(preset => {
+                      const isSelected = themeScheme === preset.id;
+                      return (
+                        <div 
+                          key={preset.id}
+                          onClick={() => handleSelectPreset(preset)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: `2px solid ${isSelected ? preset.primary : 'var(--border-color)'}`,
+                            background: isSelected ? 'rgba(0,0,0,0.04)' : 'var(--card-bg)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                            <span style={{ width: '16px', height: '16px', borderRadius: '50%', background: preset.previewColors[0], display: 'inline-block' }} />
+                            <span style={{ width: '16px', height: '16px', borderRadius: '50%', background: preset.previewColors[1], display: 'inline-block' }} />
+                          </div>
+                          <span style={{ fontSize: '12px', fontWeight: isSelected ? 600 : 500, color: 'var(--text-primary)' }}>
+                            {preset.name}
+                          </span>
+                          {isSelected && <span style={{ marginLeft: 'auto', color: preset.primary, fontWeight: 'bold' }}>✓</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label htmlFor="primary-picker" style={{ fontSize: '12px' }}>Primary Brand Color</label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input 
+                          id="primary-picker" 
+                          type="color" 
+                          value={primaryColor} 
+                          onChange={e => setPrimaryColor(e.target.value)} 
+                          style={{ width: '40px', height: '36px', padding: 0, border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        />
+                        <input 
+                          type="text" 
+                          value={primaryColor} 
+                          onChange={e => setPrimaryColor(e.target.value)} 
+                          style={{ fontSize: '12px', padding: '6px 10px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label htmlFor="accent-picker" style={{ fontSize: '12px' }}>Accent Highlight Color</label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input 
+                          id="accent-picker" 
+                          type="color" 
+                          value={accentColor} 
+                          onChange={e => setAccentColor(e.target.value)} 
+                          style={{ width: '40px', height: '36px', padding: 0, border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        />
+                        <input 
+                          type="text" 
+                          value={accentColor} 
+                          onChange={e => setAccentColor(e.target.value)} 
+                          style={{ fontSize: '12px', padding: '6px 10px' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Real-Time Live Brand Preview Banner */}
+              <div style={{ 
+                borderRadius: '10px', 
+                border: '1px solid var(--border-color)', 
+                padding: '12px 16px', 
+                background: 'var(--card-bg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoUrl} alt="Logo" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'contain' }} />
+                  ) : (
+                    <div style={{ width: '36px', height: '36px', borderRadius: '6px', background: primaryColor, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                      {initialLetter}
+                    </div>
+                  )}
+                  <div>
+                    <b style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>{wsName || 'Custom Company'}</b>
+                    <small style={{ fontSize: '11px', color: 'var(--muted)' }}>{wsSlug || 'custom'}.hub · {wsIndustry}</small>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', background: `${primaryColor}20`, color: primaryColor }}>
+                    Active Brand
+                  </span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', background: accentColor, color: '#ffffff' }}>
+                    Highlight
+                  </span>
+                </div>
               </div>
             </div>
           )}
 
           {step === 2 && (
             <div>
-              <h4 style={{ margin: '0 0 8px', fontSize: '16px' }}>2. Role & Initial Teammate Invites</h4>
+              <h4 style={{ margin: '0 0 8px', fontSize: '16px' }}>2. Role &amp; Initial Teammate Invites</h4>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>Set your leadership role and invite colleagues.</p>
 
               <div className="form-group">
@@ -2571,7 +3056,7 @@ function OnboardingWizard({ workspace, onClose, onComplete }: WizardProps) {
 
               <div className="form-group">
                 <label htmlFor="member-email">Invite Team Member (Email)</label>
-                <input id="member-email" type="email" placeholder="e.g. colleague@avensus.com" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} />
+                <input id="member-email" type="email" placeholder="e.g. colleague@company.com" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} />
               </div>
             </div>
           )}
@@ -2590,24 +3075,63 @@ function OnboardingWizard({ workspace, onClose, onComplete }: WizardProps) {
 
           {step === 4 && (
             <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
-              <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '22px', margin: '0 0 8px' }}>Workspace is Ready!</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '360px', margin: '0 auto' }}>
-                Your custom workspace <b>{wsName}</b> has been initialized with role permissions and Gantt tracking.
+              <div style={{ 
+                width: '72px', 
+                height: '72px', 
+                borderRadius: '16px', 
+                margin: '0 auto 16px', 
+                border: '2px solid var(--border-color)',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                background: 'var(--card-bg)',
+                overflow: 'hidden'
+              }}>
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', background: primaryColor, color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '32px' }}>
+                    {initialLetter}
+                  </div>
+                )}
+              </div>
+              <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '22px', margin: '0 0 8px' }}>
+                {wsName} is Ready!
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '380px', margin: '0 auto 16px' }}>
+                Your custom workspace for <b>{wsName}</b> has been initialized with customized company branding, color theme, and role permissions.
               </p>
+              <div style={{ display: 'inline-flex', gap: '8px', padding: '6px 14px', borderRadius: '8px', background: 'rgba(0,0,0,0.04)', fontSize: '12px' }}>
+                <span>Palette: <b style={{ color: primaryColor }}>Primary</b> / <b style={{ color: accentColor }}>Accent</b></span>
+                <span>•</span>
+                <span>Slug: <b>{wsSlug}.hub</b></span>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-          {step > 1 ? (
-            <button className="secondary-button" onClick={() => setStep(step - 1)}>
-              ← Back
-            </button>
-          ) : <div />}
+        <div className="modal-footer" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+          <div>
+            {step > 1 ? (
+              <button className="secondary-button" onClick={() => setStep(step - 1)}>
+                ← Back
+              </button>
+            ) : (
+              <button 
+                type="button" 
+                className="secondary-button" 
+                onClick={handleQuickSave}
+                style={{ color: primaryColor, fontWeight: 600 }}
+                title="Save changes and apply immediately without going through steps 2-4"
+              >
+                ⚡ Apply Branding Now
+              </button>
+            )}
+          </div>
 
           <button className="primary-button" onClick={handleNext}>
-            {step === 4 ? 'Launch Workspace 🚀' : 'Continue →'}
+            {step === 4 ? 'Save & Launch Workspace 🚀' : 'Continue →'}
           </button>
         </div>
       </div>
@@ -2633,10 +3157,20 @@ function ExecutiveReportModal({ workspace, projects, tasks, teamMembers, onClose
     <div className="modal-overlay">
       <div className="report-modal-content">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid var(--border-color)', paddingBottom: '16px', marginBottom: '20px' }}>
-          <div>
-            <span className="eyebrow" style={{ color: 'var(--teal)' }}>CONFIDENTIAL EXECUTIVE BRIEFING</span>
-            <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '24px', margin: '4px 0 0' }}>{workspace.name} · Portfolio Status Report</h1>
-            <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0' }}>Generated on {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {workspace.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={workspace.logoUrl} alt={workspace.name} style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'contain' }} />
+            ) : (
+              <span className="brand-mark" style={{ background: 'var(--teal)', color: '#ffffff', fontWeight: 700, width: '42px', height: '42px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}>
+                {workspace.name ? workspace.name.trim().charAt(0).toUpperCase() : 'A'}
+              </span>
+            )}
+            <div>
+              <span className="eyebrow" style={{ color: 'var(--teal)' }}>CONFIDENTIAL EXECUTIVE BRIEFING</span>
+              <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '24px', margin: '4px 0 0' }}>{workspace.name} · Portfolio Status Report</h1>
+              <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0' }}>Generated on {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="primary-button" onClick={() => window.print()} style={{ fontSize: '12px' }}>
@@ -2727,9 +3261,10 @@ interface LandingPageProps {
   logoRef: React.RefObject<HTMLImageElement | null>;
   setLogoLoaded: (val: boolean) => void;
   teamMembers: TeamMember[];
+  workspace: WorkspaceConfig;
 }
 
-function LandingPage({ onLogin, darkMode, onToggleTheme, logoLoaded, logoRef, setLogoLoaded, teamMembers }: LandingPageProps) {
+function LandingPage({ onLogin, darkMode, onToggleTheme, logoLoaded, logoRef, setLogoLoaded, teamMembers, workspace }: LandingPageProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -2907,17 +3442,22 @@ function LandingPage({ onLogin, darkMode, onToggleTheme, logoLoaded, logoRef, se
         <div className="brand" style={{ gap: '12px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
+            key={workspace.logoUrl || 'default'}
             ref={logoRef}
-            src="/logo.webp" 
-            alt="Avensus Logo"
+            src={workspace.logoUrl || "/logo.webp"} 
+            alt={`${workspace.name} Logo`}
             onLoad={() => setLogoLoaded(true)}
             onError={(e) => { e.currentTarget.style.display = 'none'; setLogoLoaded(false); }}
             style={{ display: logoLoaded ? 'block' : 'none', width: '36px', height: '36px', borderRadius: 'var(--radius-md)', objectFit: 'contain' }}
           />
-          {!logoLoaded && <span className="brand-mark">A</span>}
+          {!logoLoaded && (
+            <span className="brand-mark" style={{ background: 'var(--teal)', color: '#ffffff', fontWeight: 700 }}>
+              {workspace.name ? workspace.name.trim().charAt(0).toUpperCase() : 'A'}
+            </span>
+          )}
           <span>
-            <b>Avensus</b>
-            <small>Project Hub</small>
+            <b>{workspace.name}</b>
+            <small>{workspace.slug ? `${workspace.slug}.hub` : 'Project Hub'}</small>
           </span>
         </div>
 
